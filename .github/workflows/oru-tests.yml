@@ -1,0 +1,23 @@
+name: ORU Python protocol tests
+on:
+  push:
+    paths:
+      - "ORU/**"
+      - ".github/workflows/oru-tests.yml"
+  pull_request:
+    paths:
+      - "ORU/**"
+      - ".github/workflows/oru-tests.yml"
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: RGRPOW01 and SOLO serialization tests
+        run: python3 -m unittest discover -s ORU/tests -v
+      - name: Check Hive OS shell syntax
+        run: |
+          for f in ORU/hiveos/*.sh; do bash -n "$f"; done
