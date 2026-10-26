@@ -9,7 +9,10 @@ trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/oru-native"
 nvcc -O3 -std=c++17 \
   -gencode arch=compute_75,code=sm_75 \
-  -gencode arch=compute_75,code=compute_75 \
+  -gencode arch=compute_86,code=sm_86 \
+  -gencode arch=compute_89,code=sm_89 \
+  -gencode arch=compute_120,code=sm_120 \
+  -gencode arch=compute_120,code=compute_120 \
   ORU/src/cuda/oru_cuda.cu -o "$STAGE/oru-native/oru-cuda"
 cp ORU/src/solo.py ORU/src/rgrpow.py "$STAGE/oru-native/"
 cp ORU/hiveos/h-manifest.conf ORU/hiveos/h-config.sh ORU/hiveos/h-run.sh ORU/hiveos/h-stats.sh "$STAGE/oru-native/"
