@@ -1,19 +1,24 @@
 # HiveOS Custom Miners
 
-Dépôt dédié aux Custom Miners utilisables dans les Flight Sheets HiveOS.
+Dépôt centralisé pour organiser les mineurs, leurs configurations et les Flight Sheets Hive OS.
 
-## Mineurs disponibles
+## Catalogue des mineurs
 
-- Quantus GPU — version de développement
+| Coin | Dossier | Statut | Installation |
+| --- | --- | --- | --- |
+| Quantus (QTC) | [miners/quantus](miners/quantus/) | Développement : binaire non inclus | Compilation et empaquetage nécessaires |
+| RigorChain (ORU) | [miners/oru](miners/oru/) | Intégration d'un paquet Hive OS tiers | [Flight Sheet ORU](flight-sheets/oru.md) |
 
-## Structure
+## Arborescence
 
-- `miners/quantus/` : wrapper HiveOS du mineur Quantus
-- `flight-sheets/quantus.md` : configuration à saisir dans HiveOS
-- `scripts/` : validation et création du paquet `.tar.gz`
+- `miners/` : un sous-dossier par coin/mineur.
+- `flight-sheets/` : paramètres Hive OS documentés, coin par coin.
+- `scripts/` : outils communs de validation et d'empaquetage.
 
 ## Important
 
-Le binaire `quantus-miner` n'est pas inclus dans ce dépôt initial.
-Il doit être compilé puis copié dans `miners/quantus/quantus-miner`
-avant de créer le paquet HiveOS.
+Un dossier dans le catalogue n'implique **pas** que le dépôt fournisse un binaire minable.
+La version Quantus attend son binaire `quantus-miner`.
+Pour ORU, nous référençons le **paquet Hive OS d'Aria Energy RGR 1.1.0**, distribué par son éditeur et à vérifier avec le SHA-256 fourni dans `miners/oru/` avant installation. Nous ne redistribuons pas ce binaire.
+
+Les intégrations et les optimisations GPU doivent être testées sur un rig réel avant de déclarer une version stable.
