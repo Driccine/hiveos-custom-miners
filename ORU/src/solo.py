@@ -261,7 +261,7 @@ def main():
     p.add_argument("--wallet",default=os.environ.get("ORU_WALLET",""))
     p.add_argument("--cuda-bin",default=os.environ.get("ORU_CUDA_BIN","./oru-cuda"))
     p.add_argument("--devices",type=lambda s:[int(v) for v in s.split(",")],default=[0])
-    p.add_argument("--chunk",type=int,default=1048576)
+    p.add_argument("--chunk",type=int,default=16777216)
     p.add_argument("--refresh-seconds",type=float,default=15.0)
     p.add_argument("--pause",type=float,default=0.25)
     p.add_argument("--rounds",type=int,default=0,help="0=infinite")
