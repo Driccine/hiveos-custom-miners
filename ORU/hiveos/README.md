@@ -36,3 +36,28 @@ Mode **SOLO RIGOR uniquement** : `getblocktemplate` → calcul GPU RGRPOW01 → 
 ## Statut actuel
 
 Le code source, les tests et l'outil de génération de paquet sont présents. Cette version n'a pas été compilée avec nvcc ici et n'a pas été testée sur une carte NVIDIA ou un nœud mainnet. Ne pas la déclarer stable ni diffuser d'URL d'installation qui n'existe pas.
+
+
+## Mesurer et comparer le hashrate ORU
+
+Après installation de la version compilée sur un rig NVIDIA :
+
+```bash
+cd /hive/miners/custom/oru-native
+python3 benchmark.py --devices 0,1,2 --nonces 8388608 --samples 3 --csv oru-bench.csv
+```
+
+Sur chaque GPU, lire la moyenne médiane en MH/s, puis comparer à la mesure
+**du même algorithme ORU**, sur **le même rig**, avec un autre mineur (même pilote,
+overclocking et limite de puissance). Exemple pour une référence mesurée à 50 MH/s :
+
+```bash
+python3 benchmark.py --devices 0,1,2 --baseline-name "Autre miner ORU" --baseline-hs 50000000
+```
+
+Le benchmark fait des recherches avec une cible nulle qui ne rapporte pas de monnaie.
+Il compte la préparation CUDA et les copies mémoire. Les hashrates de coins différents
+ne sont pas comparables directement.
+
+Attention : ce paquet **n'a pas été exécuté sur GPU** dans l'environnement GitHub Actions ;
+une compilation réussie ne prouve pas l'absence d'erreurs à l'exécution.
