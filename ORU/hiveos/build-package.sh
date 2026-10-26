@@ -14,7 +14,7 @@ nvcc -O3 -std=c++17 \
   -gencode arch=compute_120,code=sm_120 \
   -gencode arch=compute_120,code=compute_120 \
   ORU/src/cuda/oru_cuda.cu -o "$STAGE/oru-native/oru-cuda"
-cp ORU/src/solo.py ORU/src/rgrpow.py "$STAGE/oru-native/"
+cp ORU/src/solo.py ORU/src/rgrpow.py ORU/hiveos/benchmark.py "$STAGE/oru-native/"
 cp ORU/hiveos/h-manifest.conf ORU/hiveos/h-config.sh ORU/hiveos/h-run.sh ORU/hiveos/h-stats.sh "$STAGE/oru-native/"
 chmod +x "$STAGE/oru-native/oru-cuda" "$STAGE/oru-native/"*.sh
 OUT="$ROOT/ORU/oru-native-0.1.0_dev.tar.gz"
