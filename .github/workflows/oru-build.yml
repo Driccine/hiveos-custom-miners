@@ -1,0 +1,68 @@
+name: Compile ORU CUDA and package HiveOS (alpha)
+
+on:
+  push:
+    branches: [dev/oru-native-cuda]
+    paths:
+      - 'ORU/**'
+      - '.github/workflows/oru-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run Python consensus tests
+        run: python3 -m unittest discover -s ORU/tests -v
+      - name: Check Hive OS shell scripts
+        run: |
+          for f in ORU/hiveos/*.sh; do bash -n "$f"; done
+      - name: Compile native CUDA 12.8 and create actual .tar.gz
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src nvidia/cuda:12.8.1-devel-ubuntu22.04 bash -euc '
+            if ! command -v python3 >/dev/null 2>&1; then
+              apt-get update && apt-get install -y --no-install-recommends python3
+            fi
+            nvcc --version
+            bash ORU/hiveos/build-package.sh
+          '
+      - name: Verify binary in archive
+        run: |
+          set -euo pipefail
+          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz
+          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz | grep -qx 'oru-native/oru-cuda'
+          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz | grep -qx 'oru-native/h-manifest.conf'
+          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz | grep -qx 'oru-native/benchmark.py'
+          mkdir -p /tmp/oru-pkgcheck
+          tar -xzf ORU/oru-native-0.1.0_dev.tar.gz -C /tmp/oru-pkgcheck
+          file /tmp/oru-pkgcheck/oru-native/oru-cuda
+          file /tmp/oru-pkgcheck/oru-native/oru-cuda | grep -q ELF
+          sha256sum ORU/oru-native-0.1.0_dev.tar.gz | tee ORU/sha256.txt
+      - name: Publish downloadable build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oru-native-cuda12_8-hiveos-alpha
+          path: |
+            ORU/oru-native-0.1.0_dev.tar.gz
+            ORU/sha256.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub pre-release for rig testing (not GPU-validated)
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="oru-cuda12.8-alpha-${GITHUB_SHA:0:8}"
+          gh release create "$TAG" ORU/oru-native-0.1.0_dev.tar.gz ORU/sha256.txt \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "ORU native CUDA 12.8 alpha (NOT GPU TESTED)" \
+            --notes "ORU prototype SOLO RGRPOW01. Compiled on GitHub Actions CUDA 12.8, but not tested on NVIDIA GPU or mainnet. No commercial miner or developer fees. Test at your own risk on a controlled rig."
