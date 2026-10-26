@@ -37,10 +37,11 @@ jobs:
       - name: Verify binary in archive
         run: |
           set -euo pipefail
-          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz
-          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz | grep -qx 'oru-native/oru-cuda'
-          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz | grep -qx 'oru-native/h-manifest.conf'
-          tar -tzf ORU/oru-native-0.1.0_dev.tar.gz | grep -qx 'oru-native/benchmark.py'
+          CONTENTS="$(tar -tzf ORU/oru-native-0.1.0_dev.tar.gz)"
+          printf '%s\n' "$CONTENTS"
+          grep -qx 'oru-native/oru-cuda' <<< "$CONTENTS"
+          grep -qx 'oru-native/h-manifest.conf' <<< "$CONTENTS"
+          grep -qx 'oru-native/benchmark.py' <<< "$CONTENTS"
           mkdir -p /tmp/oru-pkgcheck
           tar -xzf ORU/oru-native-0.1.0_dev.tar.gz -C /tmp/oru-pkgcheck
           file /tmp/oru-pkgcheck/oru-native/oru-cuda
