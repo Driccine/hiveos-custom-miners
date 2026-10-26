@@ -18,6 +18,8 @@ jobs:
           python-version: "3.11"
       - name: RGRPOW01 and SOLO serialization tests
         run: python3 -m unittest discover -s ORU/tests -v
+      - name: Validate Hive config/run path consistency
+        run: bash ORU/tests/test_hive_paths.sh
       - name: Check Hive OS shell syntax
         run: |
           for f in ORU/hiveos/*.sh; do bash -n "$f"; done

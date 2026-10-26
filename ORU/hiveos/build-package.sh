@@ -17,7 +17,7 @@ nvcc -O3 -std=c++17 \
 cp ORU/src/solo.py ORU/src/rgrpow.py ORU/hiveos/benchmark.py "$STAGE/oru-native/"
 cp ORU/hiveos/h-manifest.conf ORU/hiveos/h-config.sh ORU/hiveos/h-run.sh ORU/hiveos/h-stats.sh "$STAGE/oru-native/"
 chmod +x "$STAGE/oru-native/oru-cuda" "$STAGE/oru-native/"*.sh
-OUT="$ROOT/ORU/oru-native-0.1.0_dev.tar.gz"
+OUT="$ROOT/ORU/oru-native-0.1.1_dev.tar.gz"
 tar -C "$STAGE" -czf "$OUT" oru-native
 sha256sum "$OUT"
 echo "Hive OS archive created: $OUT"

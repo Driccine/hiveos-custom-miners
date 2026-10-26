@@ -3,7 +3,7 @@ set -euo pipefail
 # h-config.sh writes the env NEXT TO THE SCRIPTS. Resolve the same directory.
 ORU_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 CONFIG="${ORU_DIR}/oru.env"
-LOG="/var/log/miner/oru-native/oru-native.log"
+LOG="${ORU_LOG_FILE:-/var/log/miner/oru-native/oru-native.log}"
 
 if [[ ! -f "$CONFIG" ]]; then
   echo "ORU: missing config: $CONFIG. Run h-config.sh before h-run.sh." >&2

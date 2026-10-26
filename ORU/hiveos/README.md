@@ -11,7 +11,7 @@ python3 -m unittest discover -s ORU/tests -v
 bash ORU/hiveos/build-package.sh
 ```
 
-La commande génère `ORU/oru-native-0.1.0_dev.tar.gz`, archive contenant le dossier `oru-native/` requis par Hive OS.
+La commande génère `ORU/oru-native-0.1.1_dev.tar.gz`, archive contenant le dossier `oru-native/` requis par Hive OS.
 
 Dans Hive OS, renseigner le Custom Miner après hébergement de l'archive à une URL HTTPS stable, par exemple un asset GitHub Release **créé après validation**.
 
@@ -61,3 +61,7 @@ ne sont pas comparables directement.
 
 Attention : ce paquet **n'a pas été exécuté sur GPU** dans l'environnement GitHub Actions ;
 une compilation réussie ne prouve pas l'absence d'erreurs à l'exécution.
+
+## Correction des chemins (0.1.1_dev)
+
+La configuration `oru.env` est maintenant créée dans le **même dossier que les scripts `h-config.sh`/`h-run.sh`**, indépendamment de `MINER_DIR`. Cette version corrige l'erreur `oru.env: No such file or directory` du paquet 0.1.0_dev. L'installation reste une alpha SOLO qui nécessite ton propre nœud RIGOR et ne fonctionne pas avec une URL de pool Stratum.
