@@ -1,0 +1,74 @@
+name: Build GNR HiveOS
+on:
+  push:
+    branches: [gnr-hiveos-1.0.0]
+    paths: ['GNR/**', '.github/workflows/gnr-hiveos.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: gnr-hiveos-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container: ubuntu:20.04
+    timeout-minutes: 30
+    steps:
+      - name: Build dependencies (CI only)
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config python3 binutils
+      - uses: actions/checkout@v4
+        with:
+          path: adapter
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: genoryn/genoryn
+          ref: 5532d04ba7bdf3362f97a560437694fddb0bddc5
+          path: upstream
+          persist-credentials: false
+      - name: Install Rust 1.88 in build container
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup.sh
+          sh /tmp/rustup.sh -y --profile minimal --default-toolchain 1.88.0
+      - name: Test adapter
+        run: |
+          python3 -m unittest discover -s adapter/GNR/tests -v
+          for f in adapter/GNR/hiveos/*.sh; do bash -n "$f"; done
+      - name: Build official CUDA miner from pinned source
+        working-directory: upstream
+        run: |
+          . "$HOME/.cargo/env"
+          test "$(git rev-parse HEAD)" = "5532d04ba7bdf3362f97a560437694fddb0bddc5"
+          cargo build --release --locked -p krypton-miner --no-default-features --features cuda
+          ./target/release/krypton-miner --version
+          ./target/release/krypton-miner --help
+      - name: Package and verify GLIBC baseline
+        run: python3 adapter/GNR/package.py upstream dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnr-hiveos-release
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: gnr-hiveos-release
+          path: dist
+      - name: Publish verified package
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 GNR/release.py dist
