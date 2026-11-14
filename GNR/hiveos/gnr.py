@@ -21,7 +21,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 UPSTREAM = "1.0.37"
 DEFAULT_NODE = "https://genoryn.io"
 STATUS_TTL = 45
@@ -296,6 +296,109 @@ def run(config_path):
             signal.signal(sig, handler)
 
 
+
+def run_multi(config_path):
+    """Use one official CUDA miner for all GPUs: one dataset lifecycle / node client."""
+    cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    extra = []
+    if cfg.get("devices") is not None:
+        extra += ["--devices", ",".join(str(x) for x in cfg["devices"])]
+    if cfg.get("batch") is not None:
+        extra += ["--batch", str(cfg["batch"])]
+    cfg = config_from_env({"GNR_WALLET": cfg["address"],
+                           "GNR_NODE": cfg["node"], "GNR_EXTRA": shlex.join(extra)})
+    binary = ROOT / "krypton-miner"
+    check_binary(binary)
+    info = check_node(cfg["node"])
+    print("Node %s | height %s | CUDA only" % (cfg["node"], info.get("height", "?")), flush=True)
+    probe = subprocess.run([str(binary), "--list-devices", "--json"], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, universal_newlines=True, timeout=120)
+    if probe.returncode:
+        raise RuntimeError("CUDA detection failed: " + probe.stderr.strip())
+    selected = select_devices(json.loads(probe.stdout), cfg["devices"])
+    run_dir = Path(config_path).parent
+    address_file = run_dir / "address.txt"
+    address_file.write_text(cfg["address"] + "\n", encoding="ascii")
+    os.chmod(str(address_file), 0o600)
+    stats_file = run_dir / "stats.json"
+    started = time.time()
+    last_status = started
+    latest = None
+    stop = threading.Event()
+    print("Single official process for %d GPUs: %s" %
+          (len(selected), ",".join(map(str, selected))), flush=True)
+
+    def request_stop(signum, frame):
+        stop.set()
+
+    old_handlers = {}
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        old_handlers[sig] = signal.signal(sig, request_stop)
+    # Official --json status reports AGGREGATE H/s for all selected devices.
+    # Never fabricate per-GPU hashrates by dividing the total.
+    args = [str(binary), "--node", cfg["node"], "--address-file", str(address_file),
+            "--backend", "cuda", "--devices", ",".join(map(str, selected)), "--json"]
+    if cfg["batch"] is not None:
+        args += ["--batch", str(cfg["batch"])]
+    proc = None
+    lock = threading.Lock()
+
+    def consume(stream):
+        nonlocal latest, last_status
+        for line in stream:
+            parsed = accepted_status(line)
+            if parsed is not None:
+                with lock:
+                    latest = parsed
+                    last_status = time.time()
+                print("TOTAL %d GPUs | %.3f MH/s | shares %s | rejected %s | blocks %s" %
+                      (len(selected), float(parsed["hashrate_hs"]) / 1e6,
+                       parsed.get("accepted_shares", 0), parsed.get("rejected", 0),
+                       parsed.get("accepted_blocks", 0)), flush=True)
+            else:
+                print(line.rstrip(), flush=True)
+
+    try:
+        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                universal_newlines=True, bufsize=1)
+        reader = threading.Thread(target=consume, args=(proc.stdout,), daemon=True)
+        reader.start()
+        while not stop.is_set():
+            if proc.poll() is not None:
+                raise RuntimeError("Official miner stopped with exit code %s" % proc.returncode)
+            now = time.time()
+            with lock:
+                data = latest
+                seen = last_status
+            fresh = data is not None and now - seen <= STATUS_TTL
+            rate = float(data["hashrate_hs"]) if fresh else 0.0
+            stats = {"hs": [rate], "hs_units": "hs", "uptime": int(now-started),
+                     "ar": [int(data.get("accepted_shares", 0)) if data else 0,
+                            int(data.get("rejected", 0)) if data else 0],
+                     "algo": "kryptohash", "ver": UPSTREAM}
+            # One logical aggregate hash rate is reported; GPU count in separate diagnostic field.
+            atomic_json(stats_file, {"updated": now, "khs": rate / 1000.0,
+                                     "stats": stats, "gpu_count": len(selected),
+                                     "gpu_indices": selected, "accepted_blocks":
+                                     int(data.get("accepted_blocks", 0)) if data else 0})
+            # Dataset initialization can take significant time on multi-GPU rigs.
+            if now - seen > 900:
+                raise RuntimeError("No status for 15 minutes; check GPU memory, node, and logs")
+            stop.wait(5)
+    finally:
+        stop.set()
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=12)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        atomic_json(stats_file, {"updated": time.time(), "khs": 0, "stats": None})
+        for sig, handler in old_handlers.items():
+            signal.signal(sig, handler)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["configure", "run", "stats"])
@@ -311,7 +414,7 @@ def main():
         print(khs)
         print(json.dumps(stats, separators=(",", ":"), allow_nan=False))
     else:
-        run(args.path)
+        run_multi(args.path)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ import sys
 import tarfile
 import tempfile
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 UPSTREAM_SHA = "5532d04ba7bdf3362f97a560437694fddb0bddc5"
 BASE = Path(__file__).resolve().parent
 

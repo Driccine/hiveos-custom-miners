@@ -1,7 +1,7 @@
 name: Build GNR HiveOS
 on:
   push:
-    branches: [gnr-hiveos-1.0.0]
+    branches: [gnr-hiveos-1.1.0]
     paths: ['GNR/**', '.github/workflows/gnr-hiveos.yml']
   workflow_dispatch:
 permissions:

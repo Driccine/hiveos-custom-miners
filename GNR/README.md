@@ -1,6 +1,6 @@
 # GNR / Genoryn Krypton — Custom Miner HiveOS NVIDIA
 
-**Adapter 1.0.0 · upstream krypton-miner 1.0.37. Experimental: no live GPU payout test yet.**
+**Adapter 1.1.0 · upstream krypton-miner 1.0.37. Experimental: no live GPU payout test yet.**
 
 This is a HiveOS adapter around the real official miner, not a new mining algorithm or a pool.
 The official upstream is pinned to `genoryn/genoryn@5532d04ba7bdf3362f97a560437694fddb0bddc5`.
@@ -21,7 +21,7 @@ password, private key or wallet file. No address is stored in this repository.
 | Pool | Configure in miner |
 | Miner | Custom |
 | Miner name | `gnr-hiveos` |
-| Installation URL | `https://github.com/Driccine/hiveos-custom-miners/releases/download/gnr-hiveos-v1.0.0/gnr-hiveos-1.0.0.tar.gz` |
+| Installation URL | `https://github.com/Driccine/hiveos-custom-miners/releases/download/gnr-hiveos-v1.1.0/gnr-hiveos-1.1.0.tar.gz` |
 | Hash algorithm | `kryptohash` |
 | Wallet and worker template | `%WAL%` |
 | Pool URL | `https://genoryn.io` |
@@ -42,15 +42,14 @@ Do not append `.worker` to the wallet. This protocol does not use Stratum worker
 - Full public `gnr1...` payout address. Short address resolution is deliberately not added without local verification.
 - Internet access to the configured node's HTTP(S) API; node availability and accepted shares are not guaranteed.
 
-The adapter launches one official miner process per selected NVIDIA GPU to obtain **measured per-GPU**
-hashrates. Each process uses `--backend cuda --devices N --json`. CPU is only used by the official
+The adapter launches **one official CUDA miner process for all selected NVIDIA GPUs** using `--devices 0,1,... --json`, avoiding 12 redundant independent processes on a 12-GPU rig. It reports an aggregate hashrate: the upstream miner does not provide per-GPU rates in JSON mode. CPU is only used by the official
 miner for verification and coordination, not as a silent mining fallback. HiveOS owns the foreground
 supervisor and processes; SIGINT/SIGTERM stop the children. No detached screen/systemd service.
 
 `h-config.sh` writes public-only configuration under `/run/hive/miners/gnr-hiveos`.
 `h-stats.sh` reports total kH/s, per-GPU H/s, accepted shares, rejects, uptime and PCI bus IDs when
 available. Accepted full blocks are already included in `accepted_shares`; they are not counted twice.
-Stats older than 45 seconds become zero. Failed GPU processes stop the supervisor with an error.
+Stats older than 45 seconds become zero. If the sole miner process stops, the supervisor reports an error.
 The first launch verifies package SHA256 checksums. Checksums detect corruption; they are not an independent security audit.
 
 ## Logs / diagnostic

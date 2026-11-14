@@ -9,7 +9,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-TAG = "gnr-hiveos-v1.0.0"
+TAG = "gnr-hiveos-v1.1.0"
 REPO = os.environ["GITHUB_REPOSITORY"]
 TOKEN = os.environ["GITHUB_TOKEN"]
 BASE = "https://api.github.com/repos/" + REPO
@@ -27,7 +27,7 @@ def request(url, method="GET", data=None, binary=False):
 
 def main():
     folder = Path(sys.argv[1])
-    archive = folder / "gnr-hiveos-1.0.0.tar.gz"
+    archive = folder / "gnr-hiveos-1.1.0.tar.gz"
     expected = (folder / "SHA256SUMS").read_text().split()[0]
     if hashlib.sha256(archive.read_bytes()).hexdigest() != expected:
         raise SystemExit("Artifact checksum mismatch")
@@ -40,7 +40,7 @@ def main():
         raise SystemExit("This release already exists; refusing to overwrite it")
     release = request(BASE + "/releases", "POST", {
         "tag_name": TAG, "target_commitish": os.environ["GITHUB_SHA"],
-        "name": "GNR HiveOS 1.0.0 - krypton-miner 1.0.37",
+        "name": "GNR HiveOS 1.1.0 - krypton-miner 1.0.37",
         "draft": True, "prerelease": True,
         "body": "Custom HiveOS NVIDIA package. Upstream pinned to genoryn/genoryn@5532d04ba7bdf3362f97a560437694fddb0bddc5; rebuilt on Ubuntu 20.04, CUDA only. Requires glibc >= 2.31 and Python >= 3.8. No Docker, compilation, system-library upgrades or private keys on the rig. Wrapper tests and binary CLI smoke tests run in CI. **GPU mining and live payouts have not been validated on hardware: test one GPU first.** Use the FULL public gnr1 address, not gnrs1. See GNR/README.md for the Flight Sheet."})
     upload = release["upload_url"].split("{")[0]
