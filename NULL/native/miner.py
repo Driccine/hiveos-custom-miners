@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""NULL Native 0.1.0-alpha. CUDA solver, not a wrapper around another miner.
-RPlant: read-only probe available; share submission intentionally blocked.
-Solo RPC: experimental, explicit opt-in required. No keys or developer fees.
+"""NULL Native 0.1.0-alpha: original CUDA solver, not another miner's wrapper.
+RPlant diagnostic only. Experimental solo RPC requires explicit opt-in.
 """
 import argparse
 import ctypes
@@ -23,7 +22,6 @@ import rplant
 
 VERSION='0.1.0-alpha'
 
-
 def atomic_json(path,obj):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     tmp=path.with_name(path.name+'.tmp')
@@ -31,10 +29,8 @@ def atomic_json(path,obj):
         os.chmod(tmp,0o600);json.dump(obj,f,allow_nan=False);f.write('\n')
     os.replace(tmp,path)
 
-
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs): raise ValueError('RPC redirect refused')
-
 
 class RPC:
     def __init__(self,url,token):
@@ -56,7 +52,6 @@ class RPC:
             if msg.get('id')!=self.seq or 'result' not in msg: raise RuntimeError('Wrong RPC response ID')
             return msg['result']
 
-
 def parse_template(t):
     eq=t['equihash']
     if (eq['n'],eq['k'],eq['solution_length'])!=(144,5,100) or bytes.fromhex(eq['personalization'])!=proof.PREFIX:
@@ -71,7 +66,6 @@ def parse_template(t):
     return {'input':data,'target':target,'id':t['template_id'],'timestamp':t['timestamp'],
             'height':t['height'],'prev':t['prev_hash'],'expires':int(t['expires_at'])}
 
-
 def devices(text,lib):
     err=ctypes.create_string_buffer(1024);count=lib.nn_device_count(err,1024)
     if count<0: raise RuntimeError(err.value.decode(errors='replace'))
@@ -83,12 +77,11 @@ def devices(text,lib):
         raise ValueError('GPU selection invalid')
     return values
 
-
 def run(args):
     lib=gpu.load();selected=devices(args.devices,lib)
     print('NULL Native %s | %s | GPUs %s | 0%% developer fee'%(VERSION,args.mode,selected),flush=True)
     if args.mode=='benchmark': print('BENCHMARK ONLY: no pool, no rewards, no submissions.',flush=True)
-    stop=threading.Event();lock=threading.Lock();state={};solvers={};current=[None];fatal=[]
+    stop=threading.Event();lock=threading.RLock();state={};solvers={};current=[None];fatal=[]
     started=time.monotonic();rpc=None;poller=None
     if args.mode=='solo':
         if not args.allow_experimental: raise ValueError('Solo mining requires --allow-experimental')
@@ -120,6 +113,7 @@ def run(args):
         solver=None
         try:
             result=gpu.selftest(device,lib);print('SELFTEST '+json.dumps(result),flush=True)
+            if stop.is_set(): return
             solver=gpu.Solver(device,slots=args.slots,lib=lib)
             with lock: solvers[device]=solver
             count=valid=filtered=overflow=truncated=accepted=rejected=0
@@ -175,7 +169,8 @@ def run(args):
             atomic_json(args.stats,{'updated':time.time(),'mode':args.mode,'version':VERSION,'devices':snap,
                 'khs':sum(rates)/1000,'stats':{'hs':rates,'hs_units':'hs','algo':'nullpow','ver':VERSION,
                 'uptime':int(time.monotonic()-started)},'pool_accepted_shares':None})
-            stop.wait(2)
+            if stop.is_set(): time.sleep(0.2)
+            else: stop.wait(2)
         if fatal: raise RuntimeError('; '.join(fatal))
         with lock: final={k:dict(v) for k,v in state.items()}
         elapsed=time.monotonic()-started
@@ -184,7 +179,6 @@ def run(args):
         shutdown()
         for t in threads: t.join(timeout=30)
         atomic_json(args.stats,{'updated':time.time(),'khs':0,'stats':None,'version':VERSION,'stopped':True})
-
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -203,7 +197,6 @@ def main():
         for i in devices(a.devices,lib): print(json.dumps(gpu.selftest(i,lib)),flush=True)
         return
     run(a)
-
 
 if __name__=='__main__':
     try: main()

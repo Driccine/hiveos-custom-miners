@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 import hashlib,json,os,urllib.request,urllib.error,urllib.parse
 from pathlib import Path
-TAG='null-native-v0.1.0-alpha'
+TAG='null-native-v0.1.0-alpha-'+os.environ['GITHUB_SHA'][:8]
 REPO=os.environ['GITHUB_REPOSITORY']
 BASE='https://api.github.com/repos/'+REPO
 
