@@ -1,35 +1,40 @@
-# ORU — RigorChain
+# ORU — Mineur original NVIDIA (branche de développement)
 
-## Développement de notre propre mineur
+Notre projet ORU repose sur du code créé pour ce dépôt, et non sur le binaire d'un mineur tiers commercial.
 
-Ce dossier est **réservé au développement original du mineur ORU**, sans redistribution ni dépendance au binaire Aria Energy.
+## Fonctionnement
 
-L'algorithme de consensus officiel est **RGRPOW01** :
-```
-SHA3-256(b"RGRPOW01" + header_80)
-```
-- `header_80` : en-tête de bloc canonique de 80 octets ;
-- nonce : quatre octets finaux de l'en-tête, little-endian ;
-- digest de 32 octets comparé au target comme entier little-endian ;
-- voie SOLO officielle : `getblocktemplate` / `submitblock` via un nœud RIGOR local.
+- Protocole RGRPOW01 : `SHA3-256("RGRPOW01" || header_80)`.
+- `src/cuda/oru_cuda.cu` : scanner de nonces sur GPU NVIDIA en CUDA (prototype).
+- `src/solo.py` : récupération du `getblocktemplate` de notre nœud, contrôle du paiement coinbase, recherche GPU multi-cartes, vérification CPU, puis `submitblock`.
+- `src/rgrpow.py` : calcul SHA3 indépendant de référence et test CPU.
+- `tests/` : vecteurs PoW et contrôles de sérialisation SOLO.
+- `hiveos/` : scripts Custom Miner et génération du paquet Hive OS.
 
-Sources techniques du protocole : [poW officiel](https://github.com/rigorchain/rigorchain/blob/main/core/src/rigor_kernel/pow_digest.cpp) et [README du mineur de référence](https://github.com/rigorchain/rigorchain/blob/main/miner/README_MINER.md). Ces liens servent **à vérifier les règles de consensus**, pas à intégrer leur binaire.
+## Compiler et tester
 
-## Ce qui existe maintenant
-
-- `src/rgrpow.py` : **notre** implémentation simple du calcul PoW et de la recherche CPU de nonces, avec la bibliothèque standard Python ;
-- `tests/test_pow.py` : vecteurs de vérification et tests ;
-- `hiveos/README.md` : état de l'intégration Hive OS.
-
-Exécuter les tests :
 ```bash
 python3 -m unittest discover -s ORU/tests -v
+bash ORU/hiveos/build-package.sh
 ```
 
-Exécuter une recherche CPU de développement (header et cible fictifs, **aucune part soumise**) :
-```bash
-python3 ORU/src/rgrpow.py --header $(python3 -c 'print("00"*80)') --target $(python3 -c 'print("ff"*32)') --count 1024
-```
+La compilation GPU nécessite `nvcc` (CUDA Toolkit NVIDIA). Pour la série RTX 50, prévoir une chaîne d'outils et des pilotes supportant ces GPU.
 
-**Statut : prototype PoW, pas encore un vrai mineur GPU / pool / Hive OS.**
-Prochaines étapes techniques : implémenter le noyau CUDA multi-GPU, vérifier les vecteurs GPU/CPU, ajouter le client de travail SOLO ou Stratum puis l'empaquetage et les statistiques Hive OS. Aucun gain de hashrate n'est revendiqué.
+Le paquet généré localement est `ORU/oru-native-0.1.0_dev.tar.gz`. Il ne sera prêt à publier en Release que lorsque nous aurons validé la compilation, les vecteurs sur CUDA, le dialogue avec un vrai nœud RIGOR et l'acceptation d'un bloc. Les performances ne sont pas encore mesurées.
+
+## Mode SOLO et confidentialité
+
+Ce premier moteur fonctionne avec **ton propre nœud RIGOR**, pas un pool Stratum. Le nœud doit être synchronisé et utiliser le RPC JSON (mainnet, généralement `127.0.0.1:8761`). Pas de clés privées dans le miner, seulement une adresse ORU `rg1q...`.
+
+Ne rends **jamais** l'interface RPC accessible à Internet. Utilise l'accès local ou un tunnel sécurisé si ton rig Hive OS est sur un autre hôte.
+
+Instructions de Flight Sheet : [hiveos/README.md](hiveos/README.md).
+
+## Licence et limites
+
+- Source originale sous [licence MIT](LICENSE).
+- Aucune commission de développeur ni binaire payant intégrés.
+- Nous utilisons les règles de consensus publiées par le projet RIGOR comme spécification d'interopérabilité.
+- **État : alpha non testée sur GPU ni nœud mainnet.** Aucun hashrate réel ou récompense n'est garanti.
+
+Spécification : [RIGOR PoW](https://github.com/rigorchain/rigorchain/blob/main/core/src/rigor_kernel/pow_digest.cpp).
