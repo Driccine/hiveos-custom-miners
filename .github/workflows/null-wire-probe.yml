@@ -1,0 +1,49 @@
+name: NULL wire probe
+on:
+  push:
+    branches: [null-native-0.1.0]
+    paths: ['.github/workflows/null-wire-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 2
+    steps:
+      - name: Synthetic public address, subscribe and authorize; NO mining submissions
+        shell: python
+        run: |
+          import socket, ssl, json, time
+          # Diagnostic-only Pallas point (-1,2). No wallet secret and no hashing.
+          # This synthetic address must NEVER be used for actual mining or deposits.
+          p=int('40000000000000000000000000000000224698fc094cf91b992d30ed00000001',16)
+          raw=bytes(11)+(p-1).to_bytes(32,'little')
+          alphabet='qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+          bits=0; acc=0; data=[]
+          for b in raw:
+              acc=(acc<<8)|b; bits+=8
+              while bits>=5:
+                  bits-=5; data.append((acc>>bits)&31)
+          if bits: data.append((acc<<(5-bits))&31)
+          hrp='null'; values=[ord(x)>>5 for x in hrp]+[0]+[ord(x)&31 for x in hrp]+data+[0]*6
+          chk=1; generators=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3]
+          for value in values:
+              top=chk>>25; chk=((chk&0x1ffffff)<<5)^value
+              for i,g in enumerate(generators):
+                  if (top>>i)&1: chk^=g
+          chk^=0x2bc830a3
+          addr=hrp+'1'+''.join(alphabet[v] for v in data+[(chk>>(5*(5-i)))&31 for i in range(6)])
+          print('Diagnostic only; no work submitted.')
+          with socket.create_connection(('stratum-eu.rplant.xyz',17073),timeout=10) as rawsock:
+              with ssl.create_default_context().wrap_socket(rawsock,server_hostname='stratum-eu.rplant.xyz') as s:
+                  s.settimeout(10)
+                  for msg in [{'id':1,'method':'mining.subscribe','params':['null-native-wire-probe/0.1']},{'id':2,'method':'mining.authorize','params':[addr+'.protocol_probe','x']}]:
+                      s.sendall((json.dumps(msg)+'\n').encode())
+                  end=time.time()+25; size=0
+                  while time.time()<end and size<100000:
+                      try:
+                          b=s.recv(16384)
+                          if not b: break
+                          size+=len(b); print(b.decode(errors='replace'))
+                      except socket.timeout: break
