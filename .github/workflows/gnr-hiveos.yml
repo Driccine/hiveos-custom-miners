@@ -1,13 +1,13 @@
 name: Build GNR HiveOS
 on:
   push:
-    branches: [gnr-hiveos-1.1.0]
+    branches: [gnr-hiveos-1.2.0]
     paths: ['GNR/**', '.github/workflows/gnr-hiveos.yml']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: gnr-hiveos-${{ github.ref }}
+  group: gnr-hiveos-1.2.0
   cancel-in-progress: false
 jobs:
   build:
@@ -35,7 +35,7 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup.sh
           sh /tmp/rustup.sh -y --profile minimal --default-toolchain 1.88.0
-      - name: Test adapter
+      - name: Unit, concurrent HTTP and 12-process regression tests
         run: |
           python3 -m unittest discover -s adapter/GNR/tests -v
           for f in adapter/GNR/hiveos/*.sh; do bash -n "$f"; done
@@ -48,7 +48,13 @@ jobs:
           ./target/release/krypton-miner --version
           ./target/release/krypton-miner --help
       - name: Package and verify GLIBC baseline
-        run: python3 adapter/GNR/package.py upstream dist
+        run: |
+          python3 adapter/GNR/package.py upstream dist
+          mkdir verify
+          tar -xzf dist/gnr-hiveos-1.2.0.tar.gz -C verify
+          cd verify/gnr-hiveos
+          sha256sum -c SHA256SUMS
+          ./krypton-miner --version
       - uses: actions/upload-artifact@v4
         with:
           name: gnr-hiveos-release

@@ -9,5 +9,5 @@
     mkdir -p "$(dirname "$CUSTOM_LOG_BASENAME")"
     export PYTHONUNBUFFERED=1 CUDA_DEVICE_ORDER=PCI_BUS_ID
     # HiveOS owns this foreground process and its children. No screen or systemd.
-    python3 -u "$base/gnr.py" run "$CUSTOM_CONFIG_FILENAME" 2>&1 | tee -a "${CUSTOM_LOG_BASENAME}.log"
+    python3 -u "$base/runtime.py" run "$CUSTOM_CONFIG_FILENAME" 2>&1 | tee -a "${CUSTOM_LOG_BASENAME}.log"
 )

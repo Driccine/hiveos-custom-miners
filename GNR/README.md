@@ -1,83 +1,105 @@
-# GNR / Genoryn Krypton — Custom Miner HiveOS NVIDIA
+# GNR HiveOS 1.2.0 — coordinated network access, parallel NVIDIA mining
 
-**Adapter 1.1.0 · upstream krypton-miner 1.0.37. Experimental: no live GPU payout test yet.**
+Experimental adapter around `krypton-miner 1.0.37`, pinned upstream commit
+`5532d04ba7bdf3362f97a560437694fddb0bddc5`. No new fee or payout address.
 
-This is a HiveOS adapter around the real official miner, not a new mining algorithm or a pool.
-The official upstream is pinned to `genoryn/genoryn@5532d04ba7bdf3362f97a560437694fddb0bddc5`.
-It is rebuilt in CI on Ubuntu 20.04 to avoid the official binary's glibc 2.39 requirement.
-The build checks that the resulting binary requires no GLIBC symbol newer than 2.31.
-**No Docker, Rust compilation, root package installation, NVIDIA update or libc replacement on your rig.**
+## Why this supersedes 1.0.0 and the unreleased 1.1.0
 
-## Flight Sheet — champs a copier
+1.0.0 launched one process per GPU directly against the public node. Twelve workers
+polling every two seconds can exceed the upstream template budget (120/minute/IP).
+1.1.0 grouped GPUs into one unmodified miner, but its CUDA loop calls synchronous
+searches successively. That alone is not a satisfactory parallel GPU optimization.
 
-Add a GNR wallet in HiveOS using the **FULL public address `gnr1...`**, not the short `gnrs1...` address.
-The full address can be thousands of characters: this is normal. Never paste a recovery phrase,
-password, private key or wallet file. No address is stored in this repository.
+1.2.0 keeps independent CUDA workers for parallelism and measured per-GPU rates,
+but ALL their API calls go through ONE local work coordinator. It:
 
-| Champ | Valeur |
+- refreshes a shared mining template at most once per 3 seconds by default,
+  approximately 20 upstream template requests/minute/rig, not 30 per GPU;
+- caches info and account statistics for 30 seconds;
+- respects HTTP 429 Retry-After, with shared exponential backoff; it does NOT
+  rotate IPs, wallets, or spoof headers to circumvent server limits;
+- forwards each share to the real node; only its real `accepted:true` response
+  counts as accepted. It retries a submit once after an explicit HTTP 429, not
+  after an ambiguous network failure;
+- does not return expired cached work when an upstream refresh fails;
+- limits the relay to random-token-protected loopback and mining endpoints;
+- staggers worker startup by 1.5 seconds and sets RAYON_NUM_THREADS=1 per worker;
+- preserves actual per-GPU H/s, shares, rejects and PCI mapping in HiveOS;
+- stops all worker processes on termination or worker failure and prevents two
+  copies of this wrapper using the same runtime configuration simultaneously.
+
+The upstream CUDA kernel and proof validation are UNMODIFIED. No performance
+multiplier is claimed. Host cache memory is still allocated once per GPU worker.
+This fixes request duplication, not every possible CPU, RAM, driver or node issue.
+
+## Flight Sheet (same wallet, same node)
+
+| Field | Value |
 |---|---|
-| Coin | GNR (custom coin if absent) |
-| Wallet | Your GNR wallet selected in HiveOS |
+| Coin | GNR |
 | Pool | Configure in miner |
 | Miner | Custom |
 | Miner name | `gnr-hiveos` |
-| Installation URL | `https://github.com/Driccine/hiveos-custom-miners/releases/download/gnr-hiveos-v1.1.0/gnr-hiveos-1.1.0.tar.gz` |
+| Installation URL | `https://github.com/Driccine/hiveos-custom-miners/releases/download/gnr-hiveos-v1.2.0/gnr-hiveos-1.2.0.tar.gz` |
 | Hash algorithm | `kryptohash` |
 | Wallet and worker template | `%WAL%` |
 | Pool URL | `https://genoryn.io` |
-| Password | `x` (ignored) |
-| Extra config | empty (all detected NVIDIA GPUs) |
+| Password | `x` (unused) |
+| Extra config | empty for all NVIDIA GPUs, or `--devices 0,1,2,3,4,5,6,7,8,9,10,11` |
 
-**The Installation URL is usable only after the build succeeds and publishes this release.**
-Do not use GitHub's source-code ZIP as a custom-miner package.
-First test: put `--devices 0` in Extra config. To select GPUs 0 and 2: `--devices 0,2`.
-Optional: `--batch 1048576`. No other arguments are accepted, and nothing is evaluated as shell code.
-Do not append `.worker` to the wallet. This protocol does not use Stratum workers.
+Use the FULL public `gnr1...` address, never `gnrs1...`, a recovery phrase or a
+private key. No `.worker` suffix. The wrapper does not store a wallet secret.
+The installation URL becomes usable when the release is actually published.
 
-## Requirements and operation
+First validate a subset with `--devices 0,1,2,3`, then all 12. This does not stop
+another independently launched miner: stop the old Flight Sheet before switching.
+Requirements: x86-64 HiveOS, glibc >=2.31, Python >=3.8, usable NVIDIA driver.
+No drivers, system libraries, clock settings or power limits are changed.
 
-- Linux x86-64, glibc >= 2.31 (Ubuntu 20.04+ based HiveOS), Python >= 3.8, Bash, sha256sum.
-- Working NVIDIA driver able to load the upstream PTX kernel. Probe `--list-devices` is run before mining.
-- Dataset memory and GPU architecture requirements come from upstream; compatibility is checked on the rig, not assumed.
-- Full public `gnr1...` payout address. Short address resolution is deliberately not added without local verification.
-- Internet access to the configured node's HTTP(S) API; node availability and accepted shares are not guaranteed.
+## Options
 
-The adapter launches **one official CUDA miner process for all selected NVIDIA GPUs** using `--devices 0,1,... --json`, avoiding 12 redundant independent processes on a 12-GPU rig. It reports an aggregate hashrate: the upstream miner does not provide per-GPU rates in JSON mode. CPU is only used by the official
-miner for verification and coordination, not as a silent mining fallback. HiveOS owns the foreground
-supervisor and processes; SIGINT/SIGTERM stop the children. No detached screen/systemd service.
+`--devices 0,2` selects devices. `--batch 1048576` overrides the official miner's
+batch tuning; leave unset initially. `--start-delay 3` increases startup spacing.
+`--cpu-threads 2` changes the per-worker Rayon thread budget; default is 1.
+`--node-poll 5` lowers template traffic further for multiple rigs on one public IP.
 
-`h-config.sh` writes public-only configuration under `/run/hive/miners/gnr-hiveos`.
-`h-stats.sh` reports total kH/s, per-GPU H/s, accepted shares, rejects, uptime and PCI bus IDs when
-available. Accepted full blocks are already included in `accepted_shares`; they are not counted twice.
-Stats older than 45 seconds become zero. If the sole miner process stops, the supervisor reports an error.
-The first launch verifies package SHA256 checksums. Checksums detect corruption; they are not an independent security audit.
+**The quota is shared across your whole public IP, not per rig.** Default is about
+20 templates/minute/rig; 12 rigs would still exceed the inspected node's quota.
+Actual server policy may differ. A full node on your private network remains the
+preferred scaling option. This relay is NOT a validating blockchain node.
+Do not expose its loopback HTTP service to the Internet.
 
-## Logs / diagnostic
+## Check after installation
 
 ```bash
 miner
 cat /run/hive/miners/gnr-hiveos/stats.json
-/hive/miners/custom/gnr-hiveos/krypton-miner --list-devices --json
 ```
 
-If the log says `COMPLETE`, replace the short wallet address with its full public form.
-If a GPU is not usable, keep the error message: the adapter does not change drivers or mine on CPU.
-If the node is unavailable, do not infer that rewards are being credited from local hashrate alone.
-Do not run two Flight Sheets on the same GPUs at the same time.
+The log starts with `GNR HiveOS 1.2.0` and reports `GNR RELAY | templates ... |
+cache ... | HTTP429 ... | pause ...`. These counters are cumulative since startup.
+`wrapper_version` in stats must be `1.2.0`. There is no local API rate/balance
+promise: accepted shares are not proof of final on-chain payment.
 
-## Build / provenance
+Look for all selected GPUs, progressing accepted-share counters, and no sustained
+rate-limit loop. Check CPU/RAM with `free -h` and `top` if performance remains poor.
 
-The workflow `.github/workflows/gnr-hiveos.yml` builds the pinned upstream on Ubuntu 20.04,
-runs wrapper unit tests, verifies CLI help/version and GLIBC requirements, packages the four HiveOS
-hooks and miner, then publishes a prerelease with SHA256SUMS and BUILD.json.
-The compilation job has read-only repository permissions; only the separate publication job has write permissions.
+## Test boundaries and provenance
 
-Tests do not prove real GPU performance or payments. Validate one GPU and actual shares before using an entire rig.
-No developer fee is added by this wrapper. Upstream consensus and reward rules remain unchanged.
+The suite includes cached-work concurrency, 12 simulated HTTP clients, a simulated
+minute under the request budget, real Retry-After parsing, correct acceptance/
+rejection forwarding, prohibited endpoints, and a 12-process fake-miner lifecycle
+with cleanup on SIGTERM and child failure. These are SOFTWARE tests, not a real
+12-GPU benchmark. Live NVIDIA throughput and rewards must be validated on the rig.
 
-Sources inspected:
-- https://genoryn.io/docs
-- https://github.com/genoryn/genoryn/tree/v1.0.37
-- https://github.com/minershive/hiveos-linux/blob/master/hive/miners/custom/README.md
+CI rebuilds the pinned official CUDA miner on Ubuntu 20.04, verifies its CLI and
+GLIBC symbol requirement, packages the adapter and publishes SHA256SUMS/BUILD.json.
+The build job is read-only; only the publication job has release write permission.
 
-The adapter is MIT-licensed. Upstream code keeps its own MIT/Apache-2.0 license and attribution.
+Sources: upstream `apps/kryptond/src/guard.rs` (API budgets),
+`apps/kryptond/src/rpc.rs` (template/submit protocol),
+`apps/krypton-miner/src/main.rs` (polling and CUDA loop), at the commit above.
+Adapter MIT; upstream retains its MIT/Apache-2.0 licenses.
+
+Active entrypoint: `hiveos/runtime.py`; `gnr.py` is retained only for tested helpers.
+Neither its old one-process-per-GPU-direct runner nor its old single-process runner is called.
