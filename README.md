@@ -6,13 +6,16 @@ Chaque dossier à la racine contient **tous les fichiers de son coin** : code, i
 | --- | --- | --- |
 | RigorChain / ORU | [ORU/](ORU/) | Code PoW indépendant de référence en développement ; pas encore de mineur GPU Hive OS complet |
 | Quantus / QTC | [QTC/](QTC/) | Wrapper Hive OS expérimental ; binaire `quantus-miner` non inclus |
-
-| Daler / DLR | [DLR/](DLR/) | Custom Miner NVIDIA pour Crypto Connection, test des shares sur rig à confirmer |
+| Daler / DLR | [DLR/](DLR/) | Custom Miner NVIDIA pour Crypto Connection, test des shares sur rig à confirmer · [Archive HiveOS](https://raw.githubusercontent.com/Driccine/hiveos-custom-miners/680bdcc7a50db6c8e3bb80152ec8790b5fb6f3ce/DLR/dlr-cc-1.0.0.tar.gz) |
 
 ## Structure
 
 ```text
 .
+├── DLR/
+│   ├── README.md
+│   ├── dlr-cc-1.0.0.tar.gz
+│   └── hiveos/
 ├── ORU/
 │   ├── README.md
 │   ├── src/
