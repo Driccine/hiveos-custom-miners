@@ -1,0 +1,116 @@
+name: Build NULL Native CUDA
+on:
+  push:
+    branches: [null-native-0.1.0]
+    paths: ['NULL/**', '.github/workflows/null-native.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: null-native-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container: nvidia/cuda:12.4.1-devel-ubuntu20.04
+    timeout-minutes: 25
+    steps:
+      - name: Install build-only dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 git curl ca-certificates build-essential binutils
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: adapter
+      - uses: actions/checkout@v4
+        with:
+          repository: NullNetProtocol/null-chain
+          ref: 20fe0478881a4250d973d58833788695987325da
+          persist-credentials: false
+          path: reference
+      - name: Compile original NVIDIA kernels and reusable C ABI
+        run: |
+          cd adapter/NULL/native
+          nvcc -std=c++17 -O3 --shared -Xcompiler=-fPIC -Xcompiler=-pthread --cudart=static \
+            -gencode=arch=compute_75,code=sm_75 \
+            -gencode=arch=compute_86,code=sm_86 \
+            -gencode=arch=compute_86,code=compute_86 \
+            --ptxas-options=-v solver.cu hash_test.cu -o libnullcuda.so
+          python3 miner.py --version
+      - name: Generate fixtures with official pinned Rust Equihash implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup.sh
+          sh /tmp/rustup.sh -y --profile minimal --default-toolchain 1.88.0
+          . "$HOME/.cargo/env"
+          mkdir -p oracle/src
+          cp reference/crates/chain/src/equihash.rs oracle/src/equihash.rs
+          cat > oracle/Cargo.toml <<'EOF'
+          [package]
+          name = "null-reference-fixtures"
+          version = "0.0.0"
+          edition = "2021"
+          [dependencies]
+          blake2b_simd = "1"
+          thiserror = "2"
+          EOF
+          cat > oracle/src/main.rs <<'EOF'
+          #[allow(dead_code)] mod equihash;
+          fn hex(b: &[u8]) -> String { b.iter().map(|x| format!("{x:02x}")).collect() }
+          fn main() {
+              let eq=equihash::Equihash::new(equihash::Params::new(48,5).unwrap());
+              for value in 1u8..=4 {
+                  let input=[0u8;113];let nonce=[value;32];
+                  let solutions=eq.solve(&input,&nonce);
+                  for s in &solutions {eq.verify(&input,&nonce,s).unwrap();}
+                  let list=solutions.iter().map(|s| format!("\"{}\"",hex(s))).collect::<Vec<_>>().join(",");
+                  println!("{{\"input\":\"{}\",\"nonce\":\"{}\",\"solutions\":[{}]}}",hex(&input),hex(&nonce),list);
+              }
+          }
+          EOF
+          cargo run --release --manifest-path oracle/Cargo.toml > adapter/NULL/tests/rust-fixtures.jsonl
+      - name: CPU hash, proof, wire and reference tests (no GPU on this runner)
+        run: |
+          python3 -m unittest discover -s adapter/NULL/tests -v
+          python3 -m py_compile adapter/NULL/native/*.py
+      - name: Package experimental build and verify hashes
+        run: |
+          python3 adapter/NULL/package.py
+          mkdir verify
+          tar -xzf adapter/NULL/dist/null-native-0.1.0.tar.gz -C verify
+          cd verify/null-native
+          sha256sum -c SHA256SUMS
+          python3 miner.py --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: null-native-experimental
+          path: adapter/NULL/dist/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: null-native-source-and-fixtures
+          path: adapter/NULL/
+          if-no-files-found: error
+          retention-days: 30
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: null-native-experimental
+          path: dist
+      - name: Publish clearly labeled development prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 NULL/release.py

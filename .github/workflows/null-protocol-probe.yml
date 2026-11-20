@@ -1,0 +1,44 @@
+name: NULL protocol probe
+on:
+  push:
+    branches: [null-native-0.1.0]
+    paths: ['.github/workflows/null-protocol-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 3
+    steps:
+      - name: Read public pool configuration and subscribe only
+        shell: python
+        run: |
+          import json, re, socket, ssl, urllib.request, urllib.parse
+          from pathlib import Path
+          root='https://pool.rplant.xyz/'
+          try:
+              text=urllib.request.urlopen(root,timeout=15).read(1500000).decode()
+              urls=re.findall(r'<script[^>]*src=[\'\"]([^\'\"]+)',text)
+              print('SCRIPTS',urls)
+              for url in urls[:15]:
+                  full=urllib.parse.urljoin(root,url)
+                  if urllib.parse.urlparse(full).hostname != 'pool.rplant.xyz': continue
+                  try:
+                      body=urllib.request.urlopen(full,timeout=10).read(3000000).decode()
+                      matches=list(re.finditer(r'nullpow|7073|aria-energy|null1',body,re.I))
+                      for match in matches[:6]: print('MATCH',full,body[max(0,match.start()-300):match.end()+600])
+                  except Exception as ex: print(type(ex).__name__,str(ex))
+          except Exception as ex: print('PUBLIC PAGE',type(ex).__name__,str(ex))
+          for port,tls in [(7073,False),(17073,True)]:
+              try:
+                  with socket.create_connection(('stratum-eu.rplant.xyz',port),timeout=8) as raw:
+                      conn=ssl.create_default_context().wrap_socket(raw,server_hostname='stratum-eu.rplant.xyz') if tls else raw
+                      conn.settimeout(8)
+                      conn.sendall((json.dumps({'id':1,'method':'mining.subscribe','params':['null-native-diagnostic/0.1']})+'\n').encode())
+                      for i in range(3):
+                          data=conn.recv(16384)
+                          if not data: break
+                          print('STRATUM',port,data.decode(errors='replace'))
+                      if tls: conn.close()
+              except Exception as ex: print('STRATUM',port,type(ex).__name__,str(ex))
